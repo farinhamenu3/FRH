@@ -1,0 +1,2624 @@
+--[[
+    FRH - REMOVIDO KEY DO SILENT AIM
+    - Silent Aim: apenas toggle, sem bind
+    - Suavidade do Aimbot corrigida
+    - Hitbox com transparência 0.5
+    - CORES EM POPUP FLUTUANTE
+    - FOV CIRCULO PERFEITO
+    - SKELETON ESP CORRIGIDO
+--]]
+
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
+local Debris = game:GetService("Debris")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+print("🚀 FRH v37 - Carregando...")
+
+-- ============================================================
+-- LIMPEZA E CRIAÇÃO DA GUI
+-- ============================================================
+pcall(function()
+    for _, gui in pairs(CoreGui:GetChildren()) do
+        if gui.Name:find("FRH") then
+            gui:Destroy()
+        end
+    end
+end)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FRH_Panel"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = CoreGui
+screenGui.Enabled = true
+
+if not screenGui.Parent then
+    warn("❌ ERRO: ScreenGui não foi criado!")
+    return
+end
+
+print("✅ ScreenGui criado")
+
+-- ============================================================
+-- CORES PADRÃO
+-- ============================================================
+local PURPLE = Color3.fromRGB(124, 58, 237)
+local PURPLE_DARK = Color3.fromRGB(76, 29, 149)
+local PURPLE_LIGHT = Color3.fromRGB(167, 139, 250)
+local BG_DARK = Color3.fromRGB(13, 13, 20)
+local BG_CARD = Color3.fromRGB(13, 13, 20)
+local TEXT_WHITE = Color3.fromRGB(255, 255, 255)
+local TEXT_GRAY = Color3.fromRGB(203, 213, 225)
+local WHITE = Color3.fromRGB(255, 255, 255)
+
+-- ============================================================
+-- CONFIGURAÇÕES
+-- ============================================================
+local AimbotConfig = {
+    Enabled = false,
+    Smoothness = 5,
+    TeamCheck = false,
+    WallCheck = false,
+    ShowFOV = false,
+    FOVSize = 100,
+    TargetPart = "Head",
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    SilentAim = false,
+}
+
+local VisualConfig = {
+    Corner2D = false,
+    BoxESP = false,
+    ShowName = false,
+    ShowDistance = false,
+    ShowTracers = false,
+    SkeletonESP = false,
+    SkeletonColor = WHITE,
+    NamePosition = "Head",
+    DistancePosition = "Head",
+    TracersPosition = "Embaixo",
+    LinesColor = WHITE,
+    NameColor = WHITE,
+    DistanceColor = WHITE,
+}
+
+local HitboxConfig = {
+    headEnabled = false,
+    headSize = 2.0,
+    torsoEnabled = false,
+    torsoSize = 2.0,
+    transparency = 0.5
+}
+
+local MicsConfig = {
+    TPKill = false,
+    TP = false,
+    PuxarArmas = false,
+    DistanciaPuxar = 50,
+    MenuKey = Enum.KeyCode.RightControl,
+    NoRecoil = false,
+    NoSpread = false,
+    InfiniteAmmo = false,
+    AutoReload = false,
+    ModoV = false,
+}
+
+local PlayerConfig = {
+    Noclip = false,
+    NoclipKey = Enum.KeyCode.None,
+    Fly = false,
+    FlyKey = Enum.KeyCode.None,
+    FlySpeed = 50,
+    InstantInteract = false,
+    Speed = false,
+    SpeedValue = 50,
+}
+
+local Whitelist = {}
+local ConfigFileName = "FRH_Config.json"
+
+-- ============================================================
+-- CARREGAR/SALVAR CONFIG
+-- ============================================================
+local function CarregarConfiguracoes()
+    pcall(function()
+        local data = HttpService:JSONDecode(readfile(ConfigFileName))
+        if data then
+            for key, value in pairs(data) do
+                if AimbotConfig[key] ~= nil then
+                    if typeof(value) == "string" and (key == "MenuKey" or key == "NoclipKey" or key == "FlyKey") then
+                        local success, enum = pcall(function() return Enum.KeyCode[value] end)
+                        if success and enum then
+                            AimbotConfig[key] = enum
+                        else
+                            local success2, enum2 = pcall(function() return Enum.UserInputType[value] end)
+                            if success2 and enum2 then
+                                AimbotConfig[key] = enum2
+                            end
+                        end
+                    else
+                        AimbotConfig[key] = value
+                    end
+                end
+                if VisualConfig[key] ~= nil then VisualConfig[key] = value end
+                if HitboxConfig[key] ~= nil then HitboxConfig[key] = value end
+                if MicsConfig[key] ~= nil then
+                    if key == "MenuKey" and type(value) == "string" then
+                        local success, enum = pcall(function() return Enum.KeyCode[value] end)
+                        if success and enum then
+                            MicsConfig[key] = enum
+                        else
+                            local success2, enum2 = pcall(function() return Enum.UserInputType[value] end)
+                            if success2 and enum2 then
+                                MicsConfig[key] = enum2
+                            end
+                        end
+                    else
+                        MicsConfig[key] = value
+                    end
+                end
+                if PlayerConfig[key] ~= nil then
+                    if (key == "NoclipKey" or key == "FlyKey") and type(value) == "string" then
+                        local success, enum = pcall(function() return Enum.KeyCode[value] end)
+                        if success and enum then
+                            PlayerConfig[key] = enum
+                        else
+                            local success2, enum2 = pcall(function() return Enum.UserInputType[value] end)
+                            if success2 and enum2 then
+                                PlayerConfig[key] = enum2
+                            end
+                        end
+                    else
+                        PlayerConfig[key] = value
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function SalvarConfiguracoes()
+    pcall(function()
+        local dados = {}
+        for key, value in pairs(AimbotConfig) do
+            if type(value) ~= "function" then
+                if typeof(value) == "EnumItem" then dados[key] = tostring(value) else dados[key] = value end
+            end
+        end
+        for key, value in pairs(VisualConfig) do
+            if type(value) ~= "function" then
+                if typeof(value) == "EnumItem" then dados[key] = tostring(value) else dados[key] = value end
+            end
+        end
+        for key, value in pairs(HitboxConfig) do
+            if type(value) ~= "function" then
+                if typeof(value) == "EnumItem" then dados[key] = tostring(value) else dados[key] = value end
+            end
+        end
+        for key, value in pairs(MicsConfig) do
+            if type(value) ~= "function" then
+                if typeof(value) == "EnumItem" then dados[key] = tostring(value) else dados[key] = value end
+            end
+        end
+        for key, value in pairs(PlayerConfig) do
+            if type(value) ~= "function" then
+                if typeof(value) == "EnumItem" then dados[key] = tostring(value) else dados[key] = value end
+            end
+        end
+        writefile(ConfigFileName, HttpService:JSONEncode(dados))
+    end)
+end
+
+CarregarConfiguracoes()
+
+local function getBindName(bind)
+    if typeof(bind) == "EnumItem" then
+        if bind.EnumType == Enum.KeyCode then
+            return tostring(bind):gsub("Enum.KeyCode.", "")
+        elseif bind.EnumType == Enum.UserInputType then
+            return tostring(bind):gsub("Enum.UserInputType.", "")
+        end
+    end
+    return "NENHUMA"
+end
+
+-- ============================================================
+-- VARIÁVEIS DOS SISTEMAS
+-- ============================================================
+local tpKillRunning = false
+local tpKillTask = nil
+local TPKILL_INTERVAL = 25
+local waitingForBind = false
+local waitingForBindType = ""
+local flying = false
+local flyConnection = nil
+local flyBodyGyro = nil
+local flyBodyVelocity = nil
+local rainbowHue = 0
+local noclipConnection = nil
+local speedConnection = nil
+local silentAimTarget = nil
+local silentAimHooks = {}
+local modoVActive = false
+
+local ESP = {}
+
+-- FOV CIRCULO PERFEITO
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 80
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Visible = false
+FOVCircle.Radius = AimbotConfig.FOVSize or 100
+FOVCircle.Transparency = 1
+
+-- ============================================================
+-- BONE PAIRS CORRIGIDOS (SKELETON ESP)
+-- ============================================================
+local bonePairs = {
+    -- CABEÇA PARA TRONCO
+    {"Head", "UpperTorso"},
+    {"Head", "Torso"},
+    -- TRONCO
+    {"UpperTorso", "LowerTorso"},
+    {"Torso", "HumanoidRootPart"},
+    {"UpperTorso", "HumanoidRootPart"},
+    -- BRAÇO ESQUERDO
+    {"UpperTorso", "LeftUpperArm"},
+    {"Torso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    -- BRAÇO DIREITO
+    {"UpperTorso", "RightUpperArm"},
+    {"Torso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    -- PERNA ESQUERDA
+    {"LowerTorso", "LeftUpperLeg"},
+    {"HumanoidRootPart", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    -- PERNA DIREITA
+    {"LowerTorso", "RightUpperLeg"},
+    {"HumanoidRootPart", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"},
+}
+
+local SAFE_ZONES = {"Spawn", "SafeZone", "Lobby", "Hub", "Start", "Base"}
+
+local function isInSafeZone(position)
+    if not position then return false end
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part:FindFirstChild("Humanoid") == nil then
+            for _, safeName in pairs(SAFE_ZONES) do
+                if string.find(string.lower(part.Name), string.lower(safeName)) then
+                    local distance = (position - part.Position).Magnitude
+                    if distance < 20 then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNÇÃO PARA APLICAR HITBOX
+-- ============================================================
+local function aplicarHitbox()
+    pcall(function()
+        for _, v in pairs(Players:GetPlayers()) do
+            if v == player then continue end
+            if not v.Character then continue end
+            
+            local char = v.Character
+            local head = char:FindFirstChild("Head")
+            local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+            
+            local deveMostrar = true
+            if Whitelist[v.Name] then deveMostrar = false end
+            if AimbotConfig.TeamCheck and v.Team == player.Team then deveMostrar = false end
+            
+            if AimbotConfig.SilentAim then
+                deveMostrar = true
+            end
+            
+            if not deveMostrar then
+                if head then
+                    head.Size = Vector3.new(1.2, 1.2, 1.2)
+                    head.Transparency = 0
+                    head.CanCollide = true
+                    head.Massless = false
+                end
+                if torso then
+                    local defaultSize = char:FindFirstChild("UpperTorso") and Vector3.new(1.6, 1.6, 1) or Vector3.new(2, 2, 1)
+                    torso.Size = defaultSize
+                    torso.Transparency = 0
+                    torso.CanCollide = true
+                    torso.Massless = false
+                end
+            else
+                if AimbotConfig.SilentAim then
+                    if head then
+                        head.Size = Vector3.new(10, 10, 10)
+                        head.Transparency = 0.99
+                        head.CanCollide = false
+                        head.Massless = true
+                    end
+                    if torso then
+                        local defaultSize = char:FindFirstChild("UpperTorso") and Vector3.new(1.6, 1.6, 1) or Vector3.new(2, 2, 1)
+                        torso.Size = defaultSize
+                        torso.Transparency = 0
+                        torso.CanCollide = true
+                        torso.Massless = false
+                    end
+                else
+                    if HitboxConfig.headEnabled and head then
+                        head.Size = Vector3.new(HitboxConfig.headSize, HitboxConfig.headSize, HitboxConfig.headSize)
+                        head.Transparency = HitboxConfig.transparency
+                        head.CanCollide = true
+                        head.Massless = false
+                    elseif head then
+                        head.Size = Vector3.new(1.2, 1.2, 1.2)
+                        head.Transparency = 0
+                        head.CanCollide = true
+                        head.Massless = false
+                    end
+
+                    if HitboxConfig.torsoEnabled and torso then
+                        torso.Size = Vector3.new(HitboxConfig.torsoSize, HitboxConfig.torsoSize, HitboxConfig.torsoSize)
+                        torso.Transparency = HitboxConfig.transparency
+                        torso.CanCollide = true
+                        torso.Massless = false
+                    elseif torso then
+                        local defaultSize = char:FindFirstChild("UpperTorso") and Vector3.new(1.6, 1.6, 1) or Vector3.new(2, 2, 1)
+                        torso.Size = defaultSize
+                        torso.Transparency = 0
+                        torso.CanCollide = true
+                        torso.Massless = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- FUNÇÃO: Silent Aim
+-- ============================================================
+local function atualizarHitboxPorSilent()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.headEnabled = true
+        HitboxConfig.headSize = 10
+        HitboxConfig.transparency = 0.99
+        HitboxConfig.torsoEnabled = false
+        AimbotConfig.ShowFOV = true
+        AimbotConfig.FOVSize = 200
+        print("🎯 Silent Aim ATIVADO → HEAD ativado (tamanho 10, transparência 0.99)")
+    else
+        HitboxConfig.headEnabled = false
+        HitboxConfig.headSize = 2.0
+        HitboxConfig.transparency = 0.5
+        HitboxConfig.torsoEnabled = false
+        AimbotConfig.ShowFOV = false
+        AimbotConfig.FOVSize = 100
+        print("🎯 Silent Aim DESATIVADO → Hitbox restaurada")
+    end
+    aplicarHitbox()
+end
+
+-- ============================================================
+-- MONITORA PERSONAGENS NOVOS
+-- ============================================================
+local function onCharacterAdded(char)
+    task.wait(0.1)
+    if AimbotConfig.SilentAim then
+        HitboxConfig.headEnabled = true
+        HitboxConfig.headSize = 10
+        HitboxConfig.transparency = 0.99
+        HitboxConfig.torsoEnabled = false
+    end
+    aplicarHitbox()
+end
+
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= player then
+        p.CharacterAdded:Connect(onCharacterAdded)
+        if p.Character then
+            task.wait(0.1)
+            aplicarHitbox()
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if p ~= player then
+        p.CharacterAdded:Connect(onCharacterAdded)
+    end
+end)
+
+-- ============================================================
+-- FUNÇÕES DE ESP DRAWING
+-- ============================================================
+local function CreateESPVisuals(p)
+    if ESP[p] then return end
+    local objs = {
+        Box = Drawing.new("Square"),
+        Tracer = Drawing.new("Line"),
+        Name = Drawing.new("Text"),
+        Distance = Drawing.new("Text"),
+        Bones = {},
+        Corners = {}
+    }
+    objs.Box.Thickness = 1; objs.Box.Filled = false; objs.Box.Visible = false
+    objs.Tracer.Thickness = 1; objs.Tracer.Visible = false
+    objs.Name.Size = 13; objs.Name.Center = true; objs.Name.Outline = true; objs.Name.Visible = false
+    objs.Distance.Size = 11; objs.Distance.Center = true; objs.Distance.Outline = true; objs.Distance.Visible = false
+    
+    -- Cria 30 linhas para os ossos (mais que o necessário)
+    for i = 1, 30 do
+        objs.Bones[i] = Drawing.new("Line")
+        objs.Bones[i].Thickness = 2
+        objs.Bones[i].Visible = false
+    end
+    
+    for i = 1, 8 do
+        objs.Corners[i] = Drawing.new("Line")
+        objs.Corners[i].Thickness = 1
+        objs.Corners[i].Visible = false
+    end
+    ESP[p] = objs
+end
+
+local function RemoveESPVisuals(p)
+    if ESP[p] then
+        pcall(function()
+            for _, obj in pairs(ESP[p]) do
+                if type(obj) == "table" then
+                    for _, s in pairs(obj) do s:Remove() end
+                else
+                    obj:Remove()
+                end
+            end
+        end)
+        ESP[p] = nil
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    CreateESPVisuals(p)
+    p.CharacterAdded:Connect(function()
+        if ESP[p] then RemoveESPVisuals(p) end
+        CreateESPVisuals(p)
+    end)
+end)
+Players.PlayerRemoving:Connect(RemoveESPVisuals)
+for _, p in pairs(Players:GetPlayers()) do CreateESPVisuals(p) end
+
+local function IsVisible(part, character)
+    local origin = camera.CFrame.Position
+    local direction = (part.Position - origin).Unit * (part.Position - origin).Magnitude
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {player.Character}
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    if result then
+        local hitPart = result.Instance
+        if hitPart and hitPart:IsDescendantOf(character) then return true end
+        return false
+    end
+    return true
+end
+
+-- ============================================================
+-- CONSTRUÇÃO DO PAINEL
+-- ============================================================
+local BASE_WIDTH, BASE_HEIGHT = 680, 600
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "FRH_Main"
+mainFrame.Size = UDim2.new(0, BASE_WIDTH, 0, BASE_HEIGHT)
+mainFrame.Position = UDim2.new(0.5, -BASE_WIDTH/2, 0.5, -BASE_HEIGHT/2)
+mainFrame.BackgroundColor3 = BG_DARK
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+mainFrame.Visible = true
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Thickness = 2
+mainStroke.Color = PURPLE
+mainStroke.Transparency = 0.4
+mainStroke.Parent = mainFrame
+
+-- TÍTULO "FRH"
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "FRH_Title"
+titleLabel.Size = UDim2.new(1, 0, 0, 50)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "FRH"
+titleLabel.TextColor3 = TEXT_WHITE
+titleLabel.TextSize = 32
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+
+local titleLine = Instance.new("Frame")
+titleLine.Name = "FRH_TitleLine"
+titleLine.Size = UDim2.new(0.2, 0, 0, 2)
+titleLine.Position = UDim2.new(0.4, 0, 0, 46)
+titleLine.BackgroundColor3 = PURPLE
+titleLine.BorderSizePixel = 0
+titleLine.Parent = mainFrame
+
+-- ABAS
+local tabContainer = Instance.new("Frame")
+tabContainer.Name = "FRH_TabContainer"
+tabContainer.Size = UDim2.new(1, -20, 0, 40)
+tabContainer.Position = UDim2.new(0, 10, 0, 55)
+tabContainer.BackgroundTransparency = 1
+tabContainer.Parent = mainFrame
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 5)
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Parent = tabContainer
+
+-- CONTEÚDO (SCROLL)
+local contentFrame = Instance.new("ScrollingFrame")
+contentFrame.Name = "FRH_Content"
+contentFrame.Size = UDim2.new(1, -20, 1, -110)
+contentFrame.Position = UDim2.new(0, 10, 0, 100)
+contentFrame.BackgroundTransparency = 1
+contentFrame.BorderSizePixel = 0
+contentFrame.ScrollBarThickness = 4
+contentFrame.Parent = mainFrame
+
+local contentLayout = Instance.new("UIListLayout")
+contentLayout.Padding = UDim.new(0, 6)
+contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+contentLayout.Parent = contentFrame
+
+-- ABAS
+local tabs = {}
+
+local function createTab(name)
+    local btn = Instance.new("TextButton")
+    btn.Name = "FRH_Tab_" .. name
+    btn.Size = UDim2.new(0, 80, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+    btn.Text = name
+    btn.TextColor3 = TEXT_GRAY
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.Parent = tabContainer
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Thickness = 1.5
+    btnStroke.Color = PURPLE
+    btnStroke.Transparency = 1
+    btnStroke.Parent = btn
+
+    local page = Instance.new("Frame")
+    page.Name = "FRH_Page_" .. name
+    page.Size = UDim2.new(1, 0, 0, 0)
+    page.BackgroundTransparency = 1
+    page.Parent = contentFrame
+
+    local pageLayout = Instance.new("UIListLayout")
+    pageLayout.Padding = UDim.new(0, 6)
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Parent = page
+
+    tabs[name] = {btn = btn, page = page, stroke = btnStroke, layout = pageLayout}
+
+    btn.MouseButton1Click:Connect(function()
+        for _, t in pairs(tabs) do
+            t.page.Visible = false
+            t.btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+            t.btn.TextColor3 = TEXT_GRAY
+            t.stroke.Transparency = 1
+        end
+        page.Visible = true
+        btn.BackgroundColor3 = PURPLE
+        btn.TextColor3 = TEXT_WHITE
+        btnStroke.Transparency = 0
+    end)
+end
+
+createTab("Aimbot")
+createTab("Visual")
+createTab("Hitbox")
+createTab("Mics")
+createTab("Player")
+createTab("Config")
+
+local firstTab = tabs["Aimbot"]
+if firstTab then
+    firstTab.page.Visible = true
+    firstTab.btn.BackgroundColor3 = PURPLE
+    firstTab.btn.TextColor3 = TEXT_WHITE
+    firstTab.stroke.Transparency = 0
+end
+
+-- ============================================================
+-- COMPONENTES UI
+-- ============================================================
+local function createMiniToggle(text, configKey, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_Toggle_" .. text
+    container.Size = UDim2.new(1, 0, 0, 28)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+
+    local toggleBox = Instance.new("TextButton")
+    toggleBox.Name = "FRH_ToggleBox"
+    toggleBox.Size = UDim2.new(0, 16, 0, 16)
+    toggleBox.Position = UDim2.new(0, 6, 0.5, -8)
+    toggleBox.BackgroundColor3 = targetTable[configKey] and WHITE or Color3.fromRGB(0, 0, 0)
+    toggleBox.BorderSizePixel = 1
+    toggleBox.BorderColor3 = WHITE
+    toggleBox.Text = ""
+    toggleBox.Parent = container
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 3)
+    toggleCorner.Parent = toggleBox
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ToggleLabel"
+    label.Size = UDim2.new(1, -30, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    toggleBox.MouseButton1Click:Connect(function()
+        targetTable[configKey] = not targetTable[configKey]
+        toggleBox.BackgroundColor3 = targetTable[configKey] and WHITE or Color3.fromRGB(0, 0, 0)
+        if callback then callback(targetTable[configKey]) end
+        SalvarConfiguracoes()
+    end)
+
+    return toggleBox
+end
+
+-- TOGGLE COM COR
+local function createToggleWithColor(text, configKey, colorKey, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_ToggleColor_" .. text
+    container.Size = UDim2.new(1, 0, 0, 28)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    container.ClipsDescendants = false
+
+    local toggleBox = Instance.new("TextButton")
+    toggleBox.Name = "FRH_ToggleBox"
+    toggleBox.Size = UDim2.new(0, 16, 0, 16)
+    toggleBox.Position = UDim2.new(0, 6, 0.5, -8)
+    toggleBox.BackgroundColor3 = targetTable[configKey] and WHITE or Color3.fromRGB(0, 0, 0)
+    toggleBox.BorderSizePixel = 1
+    toggleBox.BorderColor3 = WHITE
+    toggleBox.Text = ""
+    toggleBox.Parent = container
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 3)
+    toggleCorner.Parent = toggleBox
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ToggleLabel"
+    label.Size = UDim2.new(0.55, 0, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local colorPreview = Instance.new("TextButton")
+    colorPreview.Name = "FRH_ColorPreview"
+    colorPreview.Size = UDim2.new(0, 18, 0, 18)
+    colorPreview.Position = UDim2.new(0.75, 0, 0.5, -9)
+    colorPreview.BackgroundColor3 = targetTable[colorKey] or WHITE
+    colorPreview.Text = ""
+    colorPreview.Parent = container
+    colorPreview.ZIndex = 10
+
+    local colorCorner = Instance.new("UICorner")
+    colorCorner.CornerRadius = UDim.new(0, 4)
+    colorCorner.Parent = colorPreview
+
+    local popup = Instance.new("Frame")
+    popup.Name = "FRH_ColorPopup"
+    popup.Size = UDim2.new(0, 180, 0, 0)
+    popup.Position = UDim2.new(0.7, -90, 0, 28)
+    popup.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    popup.BorderSizePixel = 1
+    popup.BorderColor3 = Color3.fromRGB(60, 60, 80)
+    popup.Visible = false
+    popup.ClipsDescendants = true
+    popup.Parent = container
+    popup.ZIndex = 20
+
+    local popupCorner = Instance.new("UICorner")
+    popupCorner.CornerRadius = UDim.new(0, 6)
+    popupCorner.Parent = popup
+
+    local popupLayout = Instance.new("UIListLayout")
+    popupLayout.FillDirection = Enum.FillDirection.Horizontal
+    popupLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    popupLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    popupLayout.Padding = UDim.new(0, 4)
+    popupLayout.Parent = popup
+
+    local presetColors = {
+        Color3.fromRGB(255, 255, 255),
+        Color3.fromRGB(124, 58, 237),
+        Color3.fromRGB(239, 68, 68),
+        Color3.fromRGB(34, 197, 94),
+        Color3.fromRGB(234, 179, 8),
+        Color3.fromRGB(168, 85, 247),
+        Color3.fromRGB(236, 72, 153),
+        Color3.fromRGB(255, 165, 0),
+        Color3.fromRGB(0, 255, 255),
+        Color3.fromRGB(255, 0, 255),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(255, 128, 0)
+    }
+
+    local isOpen = false
+    
+    for _, color in ipairs(presetColors) do
+        local cBtn = Instance.new("TextButton")
+        cBtn.Size = UDim2.new(0, 20, 0, 20)
+        cBtn.BackgroundColor3 = color
+        cBtn.Text = ""
+        cBtn.Parent = popup
+        cBtn.ZIndex = 20
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 3)
+        btnCorner.Parent = cBtn
+        
+        cBtn.MouseButton1Click:Connect(function()
+            targetTable[colorKey] = color
+            colorPreview.BackgroundColor3 = color
+            if callback then callback(color) end
+            SalvarConfiguracoes()
+            isOpen = false
+            popup.Visible = false
+            popup.Size = UDim2.new(0, 180, 0, 0)
+        end)
+    end
+
+    colorPreview.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        popup.Visible = isOpen
+        if isOpen then
+            popup.Size = UDim2.new(0, 180, 0, 34)
+        else
+            popup.Size = UDim2.new(0, 180, 0, 0)
+        end
+    end)
+
+    toggleBox.MouseButton1Click:Connect(function()
+        targetTable[configKey] = not targetTable[configKey]
+        toggleBox.BackgroundColor3 = targetTable[configKey] and WHITE or Color3.fromRGB(0, 0, 0)
+        if callback then callback(targetTable[configKey]) end
+        SalvarConfiguracoes()
+    end)
+
+    return toggleBox
+end
+
+-- POSITION TOGGLES
+local function createPositionToggle(text, configKey, value, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_PositionToggle_" .. text
+    container.Size = UDim2.new(1, 0, 0, 28)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+
+    local toggleBox = Instance.new("TextButton")
+    toggleBox.Name = "FRH_ToggleBox"
+    toggleBox.Size = UDim2.new(0, 16, 0, 16)
+    toggleBox.Position = UDim2.new(0, 6, 0.5, -8)
+    toggleBox.BackgroundColor3 = targetTable[configKey] == value and WHITE or Color3.fromRGB(0, 0, 0)
+    toggleBox.BorderSizePixel = 1
+    toggleBox.BorderColor3 = WHITE
+    toggleBox.Text = ""
+    toggleBox.Parent = container
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 3)
+    toggleCorner.Parent = toggleBox
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ToggleLabel"
+    label.Size = UDim2.new(1, -30, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    toggleBox.MouseButton1Click:Connect(function()
+        targetTable[configKey] = value
+        local parentContainer = container.Parent
+        for _, child in pairs(parentContainer:GetChildren()) do
+            if child:IsA("Frame") and child.Name:find("FRH_PositionToggle") then
+                local toggle = child:FindFirstChild("FRH_ToggleBox")
+                if toggle then
+                    local labelChild = child:FindFirstChild("FRH_ToggleLabel")
+                    if labelChild then
+                        local textValue = labelChild.Text
+                        local isActive = false
+                        if textValue == "PÉ" then
+                            isActive = targetTable[configKey] == "Foot"
+                        elseif textValue == "CABEÇA" then
+                            isActive = targetTable[configKey] == "Head"
+                        end
+                        toggle.BackgroundColor3 = isActive and WHITE or Color3.fromRGB(0, 0, 0)
+                    end
+                end
+            end
+        end
+        if callback then callback(value) end
+        SalvarConfiguracoes()
+    end)
+
+    return container
+end
+
+local function createTracerPositionToggle(text, configKey, value, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_TracerToggle_" .. text
+    container.Size = UDim2.new(1, 0, 0, 28)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+
+    local toggleBox = Instance.new("TextButton")
+    toggleBox.Name = "FRH_ToggleBox"
+    toggleBox.Size = UDim2.new(0, 16, 0, 16)
+    toggleBox.Position = UDim2.new(0, 6, 0.5, -8)
+    toggleBox.BackgroundColor3 = targetTable[configKey] == value and WHITE or Color3.fromRGB(0, 0, 0)
+    toggleBox.BorderSizePixel = 1
+    toggleBox.BorderColor3 = WHITE
+    toggleBox.Text = ""
+    toggleBox.Parent = container
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 3)
+    toggleCorner.Parent = toggleBox
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ToggleLabel"
+    label.Size = UDim2.new(1, -30, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    toggleBox.MouseButton1Click:Connect(function()
+        targetTable[configKey] = value
+        local parentContainer = container.Parent
+        for _, child in pairs(parentContainer:GetChildren()) do
+            if child:IsA("Frame") and child.Name:find("FRH_TracerToggle") then
+                local toggle = child:FindFirstChild("FRH_ToggleBox")
+                if toggle then
+                    local labelChild = child:FindFirstChild("FRH_ToggleLabel")
+                    if labelChild then
+                        local textValue = labelChild.Text
+                        local isActive = false
+                        if textValue == "Em cima" then
+                            isActive = targetTable[configKey] == "Em cima"
+                        elseif textValue == "Embaixo" then
+                            isActive = targetTable[configKey] == "Embaixo"
+                        end
+                        toggle.BackgroundColor3 = isActive and WHITE or Color3.fromRGB(0, 0, 0)
+                    end
+                end
+            end
+        end
+        if callback then callback(value) end
+        SalvarConfiguracoes()
+    end)
+
+    return container
+end
+
+local function createBodyPartToggle(text, value, parent)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_BodyPartToggle_" .. text
+    container.Size = UDim2.new(1, 0, 0, 28)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+
+    local toggleBox = Instance.new("TextButton")
+    toggleBox.Name = "FRH_ToggleBox"
+    toggleBox.Size = UDim2.new(0, 16, 0, 16)
+    toggleBox.Position = UDim2.new(0, 6, 0.5, -8)
+    toggleBox.BackgroundColor3 = AimbotConfig.TargetPart == value and WHITE or Color3.fromRGB(0, 0, 0)
+    toggleBox.BorderSizePixel = 1
+    toggleBox.BorderColor3 = WHITE
+    toggleBox.Text = ""
+    toggleBox.Parent = container
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 3)
+    toggleCorner.Parent = toggleBox
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ToggleLabel"
+    label.Size = UDim2.new(1, -30, 1, 0)
+    label.Position = UDim2.new(0, 28, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    toggleBox.MouseButton1Click:Connect(function()
+        AimbotConfig.TargetPart = value
+        local parentContainer = container.Parent
+        for _, child in pairs(parentContainer:GetChildren()) do
+            if child:IsA("Frame") and child.Name:find("FRH_BodyPartToggle") then
+                local toggle = child:FindFirstChild("FRH_ToggleBox")
+                if toggle then
+                    local labelChild = child:FindFirstChild("FRH_ToggleLabel")
+                    if labelChild then
+                        local textValue = labelChild.Text
+                        local isActive = (textValue == value)
+                        toggle.BackgroundColor3 = isActive and WHITE or Color3.fromRGB(0, 0, 0)
+                    end
+                end
+            end
+        end
+        SalvarConfiguracoes()
+    end)
+
+    return container
+end
+
+-- ============================================================
+-- SLIDER
+-- ============================================================
+local function createSlider(text, min, max, default, configKey, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_Slider_" .. text
+    container.Size = UDim2.new(1, 0, 0, 45)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_SliderLabel"
+    label.Size = UDim2.new(0.6, 0, 0, 18)
+    label.Position = UDim2.new(0, 6, 0, 2)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Name = "FRH_SliderValue"
+    valueLabel.Size = UDim2.new(0.2, 0, 0, 18)
+    valueLabel.Position = UDim2.new(0.8, -20, 0, 2)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = PURPLE
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 12
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = container
+    local slideBar = Instance.new("TextButton")
+    slideBar.Name = "FRH_SliderBar"
+    slideBar.Size = UDim2.new(1, -12, 0, 4)
+    slideBar.Position = UDim2.new(0, 6, 0, 30)
+    slideBar.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+    slideBar.Text = ""
+    slideBar.Parent = container
+    local fill = Instance.new("Frame")
+    fill.Name = "FRH_SliderFill"
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = PURPLE
+    fill.BorderSizePixel = 0
+    fill.Parent = slideBar
+    local sliding = false
+    local function updateSlider(input)
+        local xPercent = math.clamp((input.Position.X - slideBar.AbsolutePosition.X) / slideBar.AbsoluteSize.X, 0, 1)
+        local newValue = math.round((min + (xPercent * (max - min))) * 10) / 10
+        if newValue > max then newValue = max end
+        fill.Size = UDim2.new(xPercent, 0, 1, 0)
+        valueLabel.Text = tostring(newValue)
+        targetTable[configKey] = newValue
+        if callback then callback(newValue) end
+        SalvarConfiguracoes()
+    end
+    slideBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            sliding = true
+            updateSlider(input)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            sliding = false
+        end
+    end)
+    return container
+end
+
+-- ============================================================
+-- BIND SYSTEM
+-- ============================================================
+local function createBindSystem(text, configKey, targetTable, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_Bind_" .. text
+    container.Size = UDim2.new(1, 0, 0, 34)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_BindLabel"
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.Position = UDim2.new(0, 6, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local keyLabel = Instance.new("TextLabel")
+    keyLabel.Name = "FRH_BindKey"
+    keyLabel.Size = UDim2.new(0.25, 0, 1, 0)
+    keyLabel.Position = UDim2.new(0.45, 0, 0, 0)
+    keyLabel.BackgroundTransparency = 1
+    local currentKey = targetTable[configKey]
+    keyLabel.Text = currentKey and tostring(currentKey):gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", "") or "NENHUMA"
+    keyLabel.TextColor3 = PURPLE
+    keyLabel.Font = Enum.Font.GothamBold
+    keyLabel.TextSize = 12
+    keyLabel.TextXAlignment = Enum.TextXAlignment.Center
+    keyLabel.Parent = container
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Name = "FRH_BindBtn"
+    bindBtn.Size = UDim2.new(0, 60, 0, 22)
+    bindBtn.Position = UDim2.new(1, -70, 0.5, -11)
+    bindBtn.BackgroundColor3 = PURPLE
+    bindBtn.Text = "BIND"
+    bindBtn.TextColor3 = TEXT_WHITE
+    bindBtn.Font = Enum.Font.GothamBold
+    bindBtn.TextSize = 10
+    bindBtn.Parent = container
+
+    local bindBtnCorner = Instance.new("UICorner")
+    bindBtnCorner.CornerRadius = UDim.new(0, 4)
+    bindBtnCorner.Parent = bindBtn
+
+    bindBtn.MouseButton1Click:Connect(function()
+        if waitingForBind then
+            waitingForBind = false
+            waitingForBindType = ""
+            bindBtn.Text = "BIND"
+            bindBtn.BackgroundColor3 = PURPLE
+            return
+        end
+
+        waitingForBind = true
+        waitingForBindType = configKey
+        bindBtn.Text = "AGUARDANDO..."
+        bindBtn.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+
+        local function processBindKey(input)
+            if not waitingForBind or waitingForBindType ~= configKey then return end
+            local bindValue = nil
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                bindValue = input.KeyCode
+            elseif input.UserInputType == Enum.UserInputType.MouseButton1 or
+                   input.UserInputType == Enum.UserInputType.MouseButton2 or
+                   input.UserInputType == Enum.UserInputType.MouseButton3 then
+                bindValue = input.UserInputType
+            else
+                return
+            end
+            if bindValue == Enum.KeyCode.Unknown then return end
+
+            targetTable[configKey] = bindValue
+            keyLabel.Text = tostring(bindValue):gsub("Enum.KeyCode.", ""):gsub("Enum.UserInputType.", "")
+            waitingForBind = false
+            waitingForBindType = ""
+            bindBtn.Text = "BIND"
+            bindBtn.BackgroundColor3 = PURPLE
+            if callback then callback(bindValue) end
+            SalvarConfiguracoes()
+        end
+
+        local connection
+        connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            processBindKey(input)
+            if not waitingForBind then
+                connection:Disconnect()
+            end
+        end)
+    end)
+
+    return container
+end
+
+-- ============================================================
+-- COLOR PICKER (para FOV)
+-- ============================================================
+local function createColorPicker(text, colorKey, parent, callback)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_ColorPicker_" .. text
+    container.Size = UDim2.new(1, 0, 0, 34)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    container.ClipsDescendants = false
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FRH_ColorPickerLabel"
+    label.Size = UDim2.new(0.5, 0, 1, 0)
+    label.Position = UDim2.new(0, 6, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT_WHITE
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local previewBtn = Instance.new("TextButton")
+    previewBtn.Name = "FRH_ColorPickerPreview"
+    previewBtn.Size = UDim2.new(0, 32, 0, 18)
+    previewBtn.Position = UDim2.new(1, -42, 0.5, -9)
+    local currentColor
+    if colorKey == "FOVColor" then currentColor = AimbotConfig.FOVColor
+    else currentColor = PURPLE end
+    previewBtn.BackgroundColor3 = currentColor
+    previewBtn.Text = ""
+    previewBtn.Parent = container
+    previewBtn.ZIndex = 10
+
+    local cpCorner = Instance.new("UICorner")
+    cpCorner.CornerRadius = UDim.new(0, 4)
+    cpCorner.Parent = previewBtn
+
+    local popup = Instance.new("Frame")
+    popup.Name = "FRH_ColorPopup"
+    popup.Size = UDim2.new(0, 200, 0, 0)
+    popup.Position = UDim2.new(0.7, -100, 0, 34)
+    popup.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    popup.BorderSizePixel = 1
+    popup.BorderColor3 = Color3.fromRGB(60, 60, 80)
+    popup.Visible = false
+    popup.ClipsDescendants = true
+    popup.Parent = container
+    popup.ZIndex = 20
+
+    local popupCorner = Instance.new("UICorner")
+    popupCorner.CornerRadius = UDim.new(0, 6)
+    popupCorner.Parent = popup
+
+    local popupLayout = Instance.new("UIListLayout")
+    popupLayout.FillDirection = Enum.FillDirection.Horizontal
+    popupLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    popupLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    popupLayout.Padding = UDim.new(0, 4)
+    popupLayout.Parent = popup
+
+    local presetColors = {
+        Color3.fromRGB(255, 255, 255),
+        Color3.fromRGB(124, 58, 237),
+        Color3.fromRGB(239, 68, 68),
+        Color3.fromRGB(34, 197, 94),
+        Color3.fromRGB(234, 179, 8),
+        Color3.fromRGB(168, 85, 247),
+        Color3.fromRGB(236, 72, 153),
+        Color3.fromRGB(255, 165, 0),
+        Color3.fromRGB(0, 255, 255),
+        Color3.fromRGB(255, 0, 255),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(255, 128, 0)
+    }
+
+    local isOpen = false
+
+    for _, color in ipairs(presetColors) do
+        local cBtn = Instance.new("TextButton")
+        cBtn.Size = UDim2.new(0, 20, 0, 20)
+        cBtn.BackgroundColor3 = color
+        cBtn.Text = ""
+        cBtn.Parent = popup
+        cBtn.ZIndex = 20
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 3)
+        btnCorner.Parent = cBtn
+        
+        cBtn.MouseButton1Click:Connect(function()
+            previewBtn.BackgroundColor3 = color
+            if colorKey == "FOVColor" then
+                AimbotConfig.FOVColor = color
+            end
+            if callback then callback(color) end
+            SalvarConfiguracoes()
+            isOpen = false
+            popup.Visible = false
+            popup.Size = UDim2.new(0, 200, 0, 0)
+        end)
+    end
+
+    previewBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        popup.Visible = isOpen
+        if isOpen then
+            popup.Size = UDim2.new(0, 200, 0, 34)
+        else
+            popup.Size = UDim2.new(0, 200, 0, 0)
+        end
+    end)
+end
+
+-- ============================================================
+-- WHITELISTS
+-- ============================================================
+local function createWhitelistUI(parent)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_WhitelistAimbot"
+    container.Size = UDim2.new(1, 0, 0, 130)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local title = Instance.new("TextLabel")
+    title.Name = "FRH_WhitelistTitle"
+    title.Size = UDim2.new(1, 0, 0, 18)
+    title.Position = UDim2.new(0, 6, 0, 2)
+    title.BackgroundTransparency = 1
+    title.Text = "WHITELIST (Aimbot)"
+    title.TextColor3 = TEXT_WHITE
+    title.Font = Enum.Font.GothamSemibold
+    title.TextSize = 12
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = container
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "FRH_WhitelistScroll"
+    scroll.Size = UDim2.new(1, -10, 1, -24)
+    scroll.Position = UDim2.new(0, 5, 0, 22)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 3
+    scroll.Parent = container
+    local scrollLayout = Instance.new("UIListLayout")
+    scrollLayout.Padding = UDim.new(0, 3)
+    scrollLayout.SortOrder = Enum.SortOrder.Name
+    scrollLayout.Parent = scroll
+    local function updateUI()
+        for _, child in pairs(scroll:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
+        for _, p in pairs(Players:GetPlayers()) do
+            if p == player then continue end
+            local row = Instance.new("Frame")
+            row.Name = "FRH_WhitelistRow_" .. p.Name
+            row.Size = UDim2.new(1, 0, 0, 22)
+            row.BackgroundColor3 = Color3.fromRGB(13, 17, 28)
+            row.Parent = scroll
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "FRH_WhitelistName"
+            nameLabel.Size = UDim2.new(1, -36, 1, 0)
+            nameLabel.Position = UDim2.new(0, 6, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = p.Name
+            nameLabel.TextColor3 = TEXT_WHITE
+            nameLabel.Font = Enum.Font.Gotham
+            nameLabel.TextSize = 11
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = row
+            local toggleBox = Instance.new("TextButton")
+            toggleBox.Name = "FRH_WhitelistToggle"
+            toggleBox.Size = UDim2.new(0, 14, 0, 14)
+            toggleBox.Position = UDim2.new(1, -22, 0.5, -7)
+            toggleBox.BackgroundColor3 = Whitelist[p.Name] and WHITE or Color3.fromRGB(0, 0, 0)
+            toggleBox.BorderSizePixel = 1
+            toggleBox.BorderColor3 = WHITE
+            toggleBox.Text = ""
+            toggleBox.Parent = row
+            toggleBox.MouseButton1Click:Connect(function()
+                Whitelist[p.Name] = not Whitelist[p.Name]
+                updateUI()
+            end)
+        end
+        scroll.CanvasSize = UDim2.new(0, 0, 0, scrollLayout.AbsoluteContentSize.Y + 10)
+    end
+    updateUI()
+    Players.PlayerAdded:Connect(updateUI)
+    Players.PlayerRemoving:Connect(updateUI)
+    return container
+end
+
+local function createTPWhitelistUI(parent)
+    local container = Instance.new("Frame")
+    container.Name = "FRH_WhitelistTP"
+    container.Size = UDim2.new(1, 0, 0, 160)
+    container.BackgroundColor3 = BG_CARD
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    local title = Instance.new("TextLabel")
+    title.Name = "FRH_WhitelistTPTitle"
+    title.Size = UDim2.new(1, 0, 0, 18)
+    title.Position = UDim2.new(0, 6, 0, 2)
+    title.BackgroundTransparency = 1
+    title.Text = "WHITELIST TP"
+    title.TextColor3 = TEXT_WHITE
+    title.Font = Enum.Font.GothamSemibold
+    title.TextSize = 12
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = container
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "FRH_WhitelistTPScroll"
+    scroll.Size = UDim2.new(1, -10, 1, -24)
+    scroll.Position = UDim2.new(0, 5, 0, 22)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 3
+    scroll.Parent = container
+    local scrollLayout = Instance.new("UIListLayout")
+    scrollLayout.Padding = UDim.new(0, 3)
+    scrollLayout.SortOrder = Enum.SortOrder.Name
+    scrollLayout.Parent = scroll
+
+    local function updateUI()
+        for _, child in pairs(scroll:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
+        for _, p in pairs(Players:GetPlayers()) do
+            if p == player then continue end
+            local row = Instance.new("Frame")
+            row.Name = "FRH_WhitelistTPRow_" .. p.Name
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = Color3.fromRGB(13, 17, 28)
+            row.Parent = scroll
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "FRH_WhitelistTPName"
+            nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
+            nameLabel.Position = UDim2.new(0, 6, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = p.Name
+            nameLabel.TextColor3 = TEXT_WHITE
+            nameLabel.Font = Enum.Font.Gotham
+            nameLabel.TextSize = 11
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = row
+
+            local tpBtn = Instance.new("TextButton")
+            tpBtn.Name = "FRH_TPBtn_" .. p.Name
+            tpBtn.Size = UDim2.new(0, 50, 0, 20)
+            tpBtn.Position = UDim2.new(0.5, -25, 0.5, -10)
+            tpBtn.BackgroundColor3 = MicsConfig.TP and PURPLE or Color3.fromRGB(30, 41, 59)
+            tpBtn.Text = "TP"
+            tpBtn.TextColor3 = TEXT_WHITE
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.TextSize = 9
+            tpBtn.Parent = row
+            local tpBtnCorner = Instance.new("UICorner")
+            tpBtnCorner.CornerRadius = UDim.new(0, 4)
+            tpBtnCorner.Parent = tpBtn
+            tpBtn.MouseButton1Click:Connect(function()
+                if MicsConfig.TP then
+                    local targetChar = p.Character
+                    local targetHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                    local myChar = player.Character
+                    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    if targetHRP and myHRP then
+                        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 2, 0)
+                        tpBtn.BackgroundColor3 = Color3.fromRGB(34, 197, 94)
+                        tpBtn.Text = "✓"
+                        task.wait(0.3)
+                        tpBtn.BackgroundColor3 = MicsConfig.TP and PURPLE or Color3.fromRGB(30, 41, 59)
+                        tpBtn.Text = "TP"
+                    end
+                end
+            end)
+        end
+        scroll.CanvasSize = UDim2.new(0, 0, 0, scrollLayout.AbsoluteContentSize.Y + 10)
+    end
+
+    updateUI()
+    Players.PlayerAdded:Connect(updateUI)
+    Players.PlayerRemoving:Connect(updateUI)
+    return container
+end
+
+-- ============================================================
+-- SISTEMAS PRINCIPAIS (NOCLIP, FLY, SPEED, ETC)
+-- ============================================================
+local function toggleNoclip(value)
+    pcall(function()
+        if value == nil then PlayerConfig.Noclip = not PlayerConfig.Noclip else PlayerConfig.Noclip = value end
+        if PlayerConfig.Noclip then
+            if noclipConnection then noclipConnection:Disconnect() end
+            noclipConnection = RunService.Heartbeat:Connect(function()
+                if not PlayerConfig.Noclip then noclipConnection:Disconnect(); noclipConnection = nil; return end
+                local char = player.Character
+                if char then
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+                end
+            end)
+            print("✅ Noclip ATIVADO")
+        else
+            if noclipConnection then noclipConnection:Disconnect(); noclipConnection = nil end
+            local char = player.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = true end
+                end
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    task.wait(0.1)
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.Velocity = Vector3.new(0, 0, 0)
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end
+            end
+            print("❌ Noclip DESATIVADO")
+        end
+    end)
+end
+
+-- ============================================================
+-- FLY CORRIGIDO (ESTILO ADMIN)
+-- ============================================================
+local function toggleFly(value)
+    pcall(function()
+        if value == nil then PlayerConfig.Fly = not PlayerConfig.Fly else PlayerConfig.Fly = value end
+        
+        if PlayerConfig.Fly then
+            flying = true
+            local char = player.Character
+            if not char then 
+                print("❌ Personagem não encontrado!")
+                return 
+            end
+            
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then 
+                print("❌ HumanoidRootPart não encontrado!")
+                return 
+            end
+            
+            if flyBodyVelocity then 
+                flyBodyVelocity:Destroy() 
+                flyBodyVelocity = nil 
+            end
+            if flyBodyGyro then 
+                flyBodyGyro:Destroy() 
+                flyBodyGyro = nil 
+            end
+            
+            flyBodyVelocity = Instance.new("BodyVelocity")
+            flyBodyVelocity.MaxForce = Vector3.new(1, 1, 1) * 100000
+            flyBodyVelocity.Parent = hrp
+            
+            flyBodyGyro = Instance.new("BodyGyro")
+            flyBodyGyro.MaxTorque = Vector3.new(1, 1, 1) * 100000
+            flyBodyGyro.Parent = hrp
+            
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then 
+                humanoid.PlatformStand = true
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+            end
+            
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            
+            if flyConnection then flyConnection:Disconnect() end
+            flyConnection = RunService.RenderStepped:Connect(function()
+                if not PlayerConfig.Fly or not flying then
+                    if flyConnection then flyConnection:Disconnect() end
+                    return
+                end
+                
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if not root then return end
+                
+                if flyBodyGyro then
+                    flyBodyGyro.CFrame = CFrame.new(root.Position, root.Position + camera.CFrame.LookVector)
+                end
+                
+                local moveDirection = Vector3.new(0, 0, 0)
+                local forward = camera.CFrame.LookVector
+                local right = camera.CFrame.RightVector
+                local up = camera.CFrame.UpVector
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then 
+                    moveDirection = moveDirection + forward 
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then 
+                    moveDirection = moveDirection - forward 
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then 
+                    moveDirection = moveDirection - right 
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then 
+                    moveDirection = moveDirection + right 
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then 
+                    moveDirection = moveDirection + up 
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then 
+                    moveDirection = moveDirection - up 
+                end
+                
+                if moveDirection.Magnitude > 0 then
+                    moveDirection = moveDirection.Unit * PlayerConfig.FlySpeed
+                end
+                
+                if flyBodyVelocity then
+                    flyBodyVelocity.Velocity = moveDirection
+                end
+            end)
+            
+            print("✅ Fly ATIVADO (Estilo Admin)")
+        else
+            flying = false
+            if flyConnection then 
+                flyConnection:Disconnect() 
+                flyConnection = nil 
+            end
+            
+            if flyBodyVelocity then 
+                flyBodyVelocity:Destroy() 
+                flyBodyVelocity = nil 
+            end
+            if flyBodyGyro then 
+                flyBodyGyro:Destroy() 
+                flyBodyGyro = nil 
+            end
+            
+            local char = player.Character
+            if char then
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid then 
+                    humanoid.PlatformStand = false
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+                end
+                
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.Velocity = Vector3.new(0, 0, 0)
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end
+            end
+            print("❌ Fly DESATIVADO")
+        end
+    end)
+end
+
+local function toggleSpeed(value)
+    pcall(function()
+        if value == nil then PlayerConfig.Speed = not PlayerConfig.Speed else PlayerConfig.Speed = value end
+        if PlayerConfig.Speed then
+            if speedConnection then speedConnection:Disconnect() end
+            speedConnection = RunService.Heartbeat:Connect(function()
+                if not PlayerConfig.Speed then speedConnection:Disconnect(); speedConnection = nil; return end
+                local char = player.Character
+                if char then
+                    local humanoid = char:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.WalkSpeed ~= PlayerConfig.SpeedValue then
+                        humanoid.WalkSpeed = PlayerConfig.SpeedValue
+                    end
+                end
+            end)
+            print("✅ Speed ATIVADO")
+        else
+            if speedConnection then speedConnection:Disconnect(); speedConnection = nil end
+            local char = player.Character
+            if char then
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid then humanoid.WalkSpeed = 16 end
+            end
+            print("❌ Speed DESATIVADO")
+        end
+    end)
+end
+
+local function toggleInstantInteract(value)
+    pcall(function()
+        if value == nil then PlayerConfig.InstantInteract = not PlayerConfig.InstantInteract else PlayerConfig.InstantInteract = value end
+        print(PlayerConfig.InstantInteract and "✅ Interação Instantânea ATIVADA" or "❌ Desativada")
+    end)
+end
+
+-- ============================================================
+-- ANTI-KNOCKBACK E OUTROS SISTEMAS
+-- ============================================================
+local function forceInfiniteAmmo()
+    pcall(function()
+        local char = player.Character
+        local function processTool(tool)
+            if not tool or not tool:IsA("Tool") then return end
+            for _, obj in pairs(tool:GetDescendants()) do
+                local name = string.lower(obj.Name)
+                if name:find("ammo") or name:find("clip") or name:find("mag") or name:find("bullet") or name:find("munition") then
+                    if obj:IsA("NumberValue") or obj:IsA("IntValue") then
+                        if obj.Value < 999 then obj.Value = 999 end
+                    end
+                end
+            end
+        end
+        if char then
+            for _, tool in pairs(char:GetChildren()) do
+                if tool:IsA("Tool") then processTool(tool) end
+            end
+        end
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in pairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") then processTool(tool) end
+            end
+        end
+    end)
+end
+
+local function applyWeaponMods(tool)
+    pcall(function()
+        if not tool or not tool:IsA("Tool") then return end
+
+        if MicsConfig.NoRecoil then
+            for _, obj in pairs(tool:GetDescendants()) do
+                local name = string.lower(obj.Name)
+                if name:find("recoil") or name:find("kick") or name:find("shake") then
+                    if obj:IsA("NumberValue") or obj:IsA("IntValue") then obj.Value = 0 end
+                    if obj:IsA("Vector3Value") then obj.Value = Vector3.zero end
+                end
+            end
+        end
+
+        if MicsConfig.NoSpread then
+            for _, obj in pairs(tool:GetDescendants()) do
+                local name = string.lower(obj.Name)
+                if name:find("spread") or name:find("accuracy") or name:find("inaccuracy") then
+                    if obj:IsA("NumberValue") or obj:IsA("IntValue") then obj.Value = 0 end
+                end
+            end
+        end
+
+        if MicsConfig.InfiniteAmmo or (MicsConfig.ModoV and modoVActive) then
+            for _, obj in pairs(tool:GetDescendants()) do
+                local name = string.lower(obj.Name)
+                if name:find("ammo") or name:find("clip") or name:find("mag") or name:find("bullet") or name:find("munition") then
+                    if obj:IsA("NumberValue") or obj:IsA("IntValue") then
+                        if obj.Value < 999 then obj.Value = 999 end
+                    end
+                end
+            end
+        end
+
+        if MicsConfig.AutoReload then
+            for _, obj in pairs(tool:GetDescendants()) do
+                if obj:IsA("NumberValue") and string.lower(obj.Name):find("ammo") and obj.Value == 0 then
+                    local reloadRemote = tool:FindFirstChild("ReloadRemote")
+                    if reloadRemote and reloadRemote:IsA("RemoteEvent") then
+                        reloadRemote:FireServer()
+                    end
+                    local char = player.Character
+                    if char then
+                        local humanoid = char:FindFirstChild("Humanoid")
+                        if humanoid then
+                            humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+                            humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+task.spawn(function()
+    while task.wait(0.3) do
+        pcall(function()
+            local char = player.Character
+            if char then
+                for _, tool in pairs(char:GetChildren()) do
+                    if tool:IsA("Tool") then applyWeaponMods(tool) end
+                end
+            end
+            local backpack = player:FindFirstChild("Backpack")
+            if backpack then
+                for _, tool in pairs(backpack:GetChildren()) do
+                    if tool:IsA("Tool") then applyWeaponMods(tool) end
+                end
+            end
+            if MicsConfig.ModoV and modoVActive then forceInfiniteAmmo() end
+        end)
+    end
+end)
+
+-- ============================================================
+-- PUXAR ARMAS
+-- ============================================================
+local function PuxarItemUnico(item)
+    if not item or not item.Parent then return false end
+    local character = player.Character
+    if not character then return false end
+    local sucesso = false
+    if item:IsA("Tool") then
+        if item.Parent == character then return false end
+        pcall(function()
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if backpack then item.Parent = backpack; sucesso = true end
+        end)
+        if not sucesso then pcall(function() item.Parent = character; sucesso = true end) end
+    end
+    if not sucesso and item:IsA("BasePart") then
+        local cd = item:FindFirstChild("ClickDetector")
+        if cd then pcall(function() cd:Click() end); sucesso = true end
+    end
+    if not sucesso then
+        for _, prompt in pairs(item:GetChildren()) do
+            if prompt:IsA("ProximityPrompt") then pcall(function() prompt:Prompt() end); sucesso = true; break end
+        end
+    end
+    if not sucesso then
+        for _, prompt in pairs(item:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then pcall(function() prompt:Prompt() end); sucesso = true; break end
+        end
+    end
+    return sucesso
+end
+
+local function isPuxavel(item)
+    if not item then return false end
+    if item:IsA("Tool") then
+        local owner = item.Parent
+        if owner == player.Character then return false end
+        if owner and owner:IsA("Backpack") and owner.Parent == player then return false end
+        return true
+    end
+    if item:IsA("BasePart") and item:FindFirstChild("ClickDetector") then return true end
+    if item:FindFirstChildWhichIsA("ProximityPrompt") then return true end
+    if item:IsA("Model") then
+        if item:FindFirstChild("Handle") then return true end
+        if item:FindFirstChildWhichIsA("Tool") then return true end
+        if item:FindFirstChild("ClickDetector") then return true end
+        if item:FindFirstChildWhichIsA("ProximityPrompt") then return true end
+    end
+    return false
+end
+
+task.spawn(function()
+    local puxadosCache = {}
+    while task.wait(0.5) do
+        if not MicsConfig.PuxarArmas then puxadosCache = {} continue end
+        pcall(function()
+            local character = player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            local distanciaMax = MicsConfig.DistanciaPuxar
+            local itemsPuxados = {}
+            for _, item in pairs(workspace:GetDescendants()) do
+                if isPuxavel(item) then
+                    local itemPos = nil
+                    if item:IsA("BasePart") then itemPos = item.Position
+                    elseif item:IsA("Tool") then
+                        local handle = item:FindFirstChild("Handle")
+                        if handle and handle:IsA("BasePart") then itemPos = handle.Position
+                        else
+                            local part = item:FindFirstChildWhichIsA("BasePart")
+                            if part then itemPos = part.Position end
+                        end
+                    elseif item:IsA("Model") then
+                        local handle = item:FindFirstChild("Handle")
+                        if handle and handle:IsA("BasePart") then itemPos = handle.Position
+                        else
+                            local part = item:FindFirstChildWhichIsA("BasePart")
+                            if part then itemPos = part.Position end
+                        end
+                    end
+                    if itemPos then
+                        local distancia = (root.Position - itemPos).Magnitude
+                        if distancia < distanciaMax then
+                            local parent = item.Parent
+                            if parent ~= character and parent ~= player and parent ~= player.Character then
+                                local isInHand = false
+                                if parent and parent:IsA("Model") and parent:FindFirstChild("Humanoid") then isInHand = true end
+                                if not isInHand then table.insert(itemsPuxados, item) end
+                            end
+                        end
+                    end
+                end
+            end
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player then
+                    local backpack = p:FindFirstChildOfClass("Backpack")
+                    if backpack then
+                        for _, tool in pairs(backpack:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                local targetChar = p.Character
+                                local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                                if targetRoot then
+                                    local distancia = (root.Position - targetRoot.Position).Magnitude
+                                    if distancia < distanciaMax then table.insert(itemsPuxados, tool) end
+                                end
+                            end
+                        end
+                    end
+                    local targetChar = p.Character
+                    if targetChar then
+                        for _, tool in pairs(targetChar:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                                if targetRoot then
+                                    local distancia = (root.Position - targetRoot.Position).Magnitude
+                                    if distancia < distanciaMax then table.insert(itemsPuxados, tool) end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            for _, item in pairs(itemsPuxados) do
+                if item and item.Parent then
+                    local itemId = tostring(item)
+                    if not puxadosCache[itemId] then
+                        local sucesso = PuxarItemUnico(item)
+                        if sucesso then
+                            puxadosCache[itemId] = true
+                            task.spawn(function()
+                                task.wait(0.5)
+                                puxadosCache[itemId] = nil
+                            end)
+                        end
+                    end
+                end
+            end
+            for key, _ in pairs(puxadosCache) do
+                local found = false
+                for _, item in pairs(itemsPuxados) do
+                    if tostring(item) == key then found = true; break end
+                end
+                if not found then puxadosCache[key] = nil end
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- TPKILL (25 SEGUNDOS)
+-- ============================================================
+local function startTPKill()
+    if tpKillRunning then return end
+    tpKillRunning = true
+    tpKillTask = task.spawn(function()
+        while tpKillRunning and MicsConfig.TPKill do
+            task.wait(TPKILL_INTERVAL)
+            if not tpKillRunning or not MicsConfig.TPKill then break end
+            local targets = {}
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Character then
+                    local char = p.Character
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    local humanoid = char:FindFirstChild("Humanoid")
+                    if hrp and humanoid and humanoid.Health > 0 and not Whitelist[p.Name] and not isInSafeZone(hrp.Position) then
+                        table.insert(targets, {hrp = hrp, player = p})
+                    end
+                end
+            end
+            if #targets > 0 then
+                local target = targets[math.random(1, #targets)]
+                local myChar = player.Character
+                local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myHRP and target.hrp then
+                    local oldCanCollide = myHRP.CanCollide
+                    myHRP.CanCollide = false
+                    myHRP.CFrame = target.hrp.CFrame + Vector3.new(0, 2, 0)
+                    task.wait(0.1)
+                    myHRP.CanCollide = oldCanCollide
+                    print("TPKILL: Teleportado para " .. target.player.Name)
+                end
+            end
+        end
+    end)
+end
+
+local function stopTPKill()
+    tpKillRunning = false
+    if tpKillTask then task.cancel(tpKillTask); tpKillTask = nil end
+    print("TPKILL DESATIVADO")
+end
+
+-- ============================================================
+-- SILENT AIM HOOKS
+-- ============================================================
+local function setupSilentAimHook(tool)
+    pcall(function()
+        if not tool or not tool:IsA("Tool") then return end
+        if silentAimHooks[tool] then return end
+
+        local fireRemote = tool:FindFirstChild("FireRemote") or tool:FindFirstChild("ShootRemote") or tool:FindFirstChild("RemoteEvent")
+        if fireRemote and fireRemote:IsA("RemoteEvent") then
+            local originalFunction = fireRemote.OnClientEvent
+            local connection
+            connection = fireRemote.OnClientEvent:Connect(function(...)
+                if AimbotConfig.SilentAim and silentAimTarget then
+                    local args = {...}
+                    if args[1] and typeof(args[1]) == "CFrame" then
+                        args[1] = CFrame.new(silentAimTarget.position)
+                    elseif args[1] and typeof(args[1]) == "Vector3" then
+                        args[1] = silentAimTarget.position
+                    end
+                    fireRemote:FireServer(unpack(args))
+                    return
+                end
+                if originalFunction then originalFunction(...) end
+            end)
+            silentAimHooks[tool] = connection
+        end
+
+        local activatedConnection
+        activatedConnection = tool.Activated:Connect(function()
+            if AimbotConfig.SilentAim and silentAimTarget then
+                local mouse = player:GetMouse()
+                if mouse then
+                    local originalHit = mouse.Hit
+                    mouse.Hit = CFrame.new(silentAimTarget.position)
+                    task.wait(0)
+                    mouse.Hit = originalHit
+                end
+            end
+        end)
+        silentAimHooks[tool] = {remote = silentAimHooks[tool], activated = activatedConnection}
+    end)
+end
+
+local function applySilentAimHooks()
+    pcall(function()
+        local char = player.Character
+        if char then
+            for _, tool in pairs(char:GetChildren()) do
+                if tool:IsA("Tool") then setupSilentAimHook(tool) end
+            end
+        end
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in pairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") then setupSilentAimHook(tool) end
+            end
+        end
+    end)
+end
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    applySilentAimHooks()
+end)
+task.wait(1)
+applySilentAimHooks()
+
+task.spawn(function()
+    while task.wait(0.5) do
+        applySilentAimHooks()
+    end
+end)
+
+-- ============================================================
+-- INPUT HANDLER
+-- ============================================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    local noclipKey = PlayerConfig.NoclipKey
+    if (input.KeyCode == noclipKey) or (input.UserInputType == noclipKey) then
+        if noclipKey ~= Enum.KeyCode.None and noclipKey ~= Enum.UserInputType.None then
+            toggleNoclip(nil)
+        end
+    end
+
+    local flyKey = PlayerConfig.FlyKey
+    if (input.KeyCode == flyKey) or (input.UserInputType == flyKey) then
+        if flyKey ~= Enum.KeyCode.None and flyKey ~= Enum.UserInputType.None then
+            toggleFly(nil)
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.V and MicsConfig.ModoV then
+        modoVActive = not modoVActive
+        print("Modo V: " .. (modoVActive and "ATIVADO" or "DESATIVADO"))
+        if modoVActive then forceInfiniteAmmo() end
+    end
+
+    local menuKey = MicsConfig.MenuKey
+    if (input.KeyCode == menuKey) or (input.UserInputType == menuKey) then
+        screenGui.Enabled = not screenGui.Enabled
+        print("🔄 Menu: " .. (screenGui.Enabled and "ABERTO" or "FECHADO"))
+    end
+end)
+
+-- ============================================================
+-- POPULAR ABAS
+-- ============================================================
+print("📋 Populando abas...")
+
+-- Aimbot
+local aimPage = tabs["Aimbot"].page
+createMiniToggle("Ativar Aimbot", "Enabled", AimbotConfig, aimPage)
+createSlider("Suavidade do Aimbot", 1, 30, 5, "Smoothness", AimbotConfig, aimPage)
+
+-- Body Part como toggles
+local bodyPartContainer = Instance.new("Frame")
+bodyPartContainer.Name = "FRH_BodyPartContainer"
+bodyPartContainer.Size = UDim2.new(1, 0, 0, 28)
+bodyPartContainer.BackgroundTransparency = 1
+bodyPartContainer.Parent = aimPage
+
+local bodyLabel = Instance.new("TextLabel")
+bodyLabel.Name = "FRH_BodyPartLabel"
+bodyLabel.Size = UDim2.new(1, 0, 0, 28)
+bodyLabel.BackgroundTransparency = 1
+bodyLabel.Text = "Target Selection"
+bodyLabel.TextColor3 = TEXT_WHITE
+bodyLabel.Font = Enum.Font.Gotham
+bodyLabel.TextSize = 12
+bodyLabel.TextXAlignment = Enum.TextXAlignment.Left
+bodyLabel.Parent = bodyPartContainer
+
+createBodyPartToggle("Head", "Head", aimPage)
+createBodyPartToggle("Torso", "Torso", aimPage)
+createBodyPartToggle("Pelvis", "Pelvis", aimPage)
+
+createSlider("FOV", 30, 400, 100, "FOVSize", AimbotConfig, aimPage)
+createMiniToggle("Mostrar FOV", "ShowFOV", AimbotConfig, aimPage)
+createMiniToggle("Silent Aim", "SilentAim", AimbotConfig, aimPage, function(value)
+    atualizarHitboxPorSilent()
+    SalvarConfiguracoes()
+end)
+createMiniToggle("Team Check", "TeamCheck", AimbotConfig, aimPage, function()
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+createMiniToggle("Wall Check", "WallCheck", AimbotConfig, aimPage)
+createColorPicker("FOV Color", "FOVColor", aimPage)
+createWhitelistUI(aimPage)
+
+-- Visual
+local visPage = tabs["Visual"].page
+createMiniToggle("Corner 2D", "Corner2D", VisualConfig, visPage)
+createMiniToggle("Box ESP", "BoxESP", VisualConfig, visPage)
+
+-- NOME COM COR
+createToggleWithColor("Mostrar Nome", "ShowName", "NameColor", VisualConfig, visPage)
+
+-- DISTÂNCIA COM COR
+createToggleWithColor("Mostrar Distância", "ShowDistance", "DistanceColor", VisualConfig, visPage)
+
+-- POSIÇÃO DA DISTÂNCIA (sem label)
+createPositionToggle("CABEÇA", "DistancePosition", "Head", VisualConfig, visPage)
+createPositionToggle("PÉ", "DistancePosition", "Foot", VisualConfig, visPage)
+
+-- TRACERS COM COR
+createToggleWithColor("Tracers", "ShowTracers", "LinesColor", VisualConfig, visPage)
+
+-- POSIÇÃO DOS TRACERS (sem label)
+createTracerPositionToggle("Em cima", "TracersPosition", "Em cima", VisualConfig, visPage)
+createTracerPositionToggle("Embaixo", "TracersPosition", "Embaixo", VisualConfig, visPage)
+
+-- SKELETON COM COR
+createToggleWithColor("Skeleton ESP", "SkeletonESP", "SkeletonColor", VisualConfig, visPage)
+
+-- Hitbox
+local hitPage = tabs["Hitbox"].page
+createMiniToggle("Cabeça (HEAD)", "headEnabled", HitboxConfig, hitPage, function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.headEnabled = true
+        HitboxConfig.headSize = 10
+        HitboxConfig.transparency = 0.99
+        print("⚠️ Silent Aim está ativo, HEAD configurada automaticamente!")
+        aplicarHitbox()
+        return
+    end
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+createSlider("Tamanho da Cabeça (1-10)", 1, 10, 2, "headSize", HitboxConfig, hitPage, function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.headSize = 10
+        aplicarHitbox()
+        return
+    end
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+createMiniToggle("Tronco", "torsoEnabled", HitboxConfig, hitPage, function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.torsoEnabled = false
+        aplicarHitbox()
+        return
+    end
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+createSlider("Tamanho do Tronco (1-10)", 1, 10, 2, "torsoSize", HitboxConfig, hitPage, function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.torsoSize = 2.0
+        aplicarHitbox()
+        return
+    end
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+createSlider("Transparência (0-1)", 0, 1, 0.5, "transparency", HitboxConfig, hitPage, function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.transparency = 0.99
+        aplicarHitbox()
+        return
+    end
+    aplicarHitbox()
+    SalvarConfiguracoes()
+end)
+
+-- Aviso sobre Silent Aim
+local silentAviso = Instance.new("TextLabel")
+silentAviso.Name = "FRH_SilentAviso"
+silentAviso.Size = UDim2.new(1, 0, 0, 20)
+silentAviso.BackgroundTransparency = 1
+silentAviso.Text = "⚠️ Silent Aim ativa HEAD (tamanho 10, transp 0.99)"
+silentAviso.TextColor3 = Color3.fromRGB(255, 200, 0)
+silentAviso.Font = Enum.Font.Gotham
+silentAviso.TextSize = 11
+silentAviso.TextXAlignment = Enum.TextXAlignment.Center
+silentAviso.Parent = hitPage
+
+-- Mics
+local micsPage = tabs["Mics"].page
+createBindSystem("Tecla do Menu", "MenuKey", MicsConfig, micsPage)
+createMiniToggle("TPKILL", "TPKill", MicsConfig, micsPage, function() if MicsConfig.TPKill then startTPKill() else stopTPKill() end end)
+createMiniToggle("TP", "TP", MicsConfig, micsPage)
+createTPWhitelistUI(micsPage)
+createMiniToggle("Puxar Armas", "PuxarArmas", MicsConfig, micsPage)
+createSlider("Distância Puxar (1-1000)", 1, 1000, 50, "DistanciaPuxar", MicsConfig, micsPage)
+createMiniToggle("No Recoil", "NoRecoil", MicsConfig, micsPage)
+createMiniToggle("No Spread", "NoSpread", MicsConfig, micsPage)
+createMiniToggle("Infinite Ammo", "InfiniteAmmo", MicsConfig, micsPage)
+createMiniToggle("Modo V", "ModoV", MicsConfig, micsPage)
+createMiniToggle("Auto Reload", "AutoReload", MicsConfig, micsPage)
+
+-- Player
+local playerPage = tabs["Player"].page
+createMiniToggle("Noclip", "Noclip", PlayerConfig, playerPage, function(v) toggleNoclip(v) end)
+createBindSystem("BIND NOCLIP", "NoclipKey", PlayerConfig, playerPage)
+createMiniToggle("Fly", "Fly", PlayerConfig, playerPage, function(v) toggleFly(v) end)
+createBindSystem("BIND FLY", "FlyKey", PlayerConfig, playerPage)
+createSlider("Velocidade Fly (km/h)", 1, 200, 50, "FlySpeed", PlayerConfig, playerPage)
+createMiniToggle("Speed", "Speed", PlayerConfig, playerPage, function(v) toggleSpeed(v) end)
+createSlider("Velocidade Speed (km/h)", 1, 200, 50, "SpeedValue", PlayerConfig, playerPage)
+createMiniToggle("Interação Instantânea", "InstantInteract", PlayerConfig, playerPage, function(v) toggleInstantInteract(v) end)
+
+-- Config
+local configPage = tabs["Config"].page
+local labelConfig = Instance.new("TextLabel")
+labelConfig.Name = "FRH_ConfigLabel"
+labelConfig.Size = UDim2.new(1, 0, 0, 30)
+labelConfig.BackgroundTransparency = 1
+labelConfig.Text = "Configurações salvas automaticamente"
+labelConfig.TextColor3 = TEXT_GRAY
+labelConfig.Font = Enum.Font.Gotham
+labelConfig.TextSize = 12
+labelConfig.TextXAlignment = Enum.TextXAlignment.Center
+labelConfig.Parent = configPage
+
+print("✅ Abas populadas com sucesso")
+
+-- ============================================================
+-- LOOP PRINCIPAL (AIMBOT + SILENT AIM + ESP COM SKELETON CORRIGIDO)
+-- ============================================================
+local LastCameraRotation = camera.CFrame.Rotation
+local CurrentTarget = nil
+
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        -- FOV CIRCULO PERFEITO
+        FOVCircle.Visible = AimbotConfig.ShowFOV and screenGui.Enabled
+        FOVCircle.Radius = AimbotConfig.FOVSize
+        FOVCircle.Position = UserInputService:GetMouseLocation()
+        FOVCircle.Color = AimbotConfig.FOVColor
+        FOVCircle.Transparency = 1
+        FOVCircle.Thickness = 2
+        FOVCircle.NumSides = 80
+
+        if MicsConfig.NoRecoil then
+            if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                camera.CFrame = CFrame.new(camera.CFrame.Position) * LastCameraRotation
+            else
+                LastCameraRotation = camera.CFrame.Rotation
+            end
+        end
+
+        -- SILENT AIM
+        if AimbotConfig.SilentAim and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            local targets = {}
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Character and not Whitelist[p.Name] then
+                    local char = p.Character
+                    local humanoid = char:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        if not AimbotConfig.TeamCheck or p.Team ~= player.Team then
+                            local targetPart = nil
+                            if AimbotConfig.TargetPart == "Head" then
+                                targetPart = char:FindFirstChild("Head")
+                            elseif AimbotConfig.TargetPart == "Torso" then
+                                targetPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                            elseif AimbotConfig.TargetPart == "Pelvis" then
+                                targetPart = char:FindFirstChild("LowerTorso") or char:FindFirstChild("HumanoidRootPart")
+                            end
+                            if not targetPart then targetPart = char:FindFirstChild("HumanoidRootPart") end
+                            
+                            if targetPart then
+                                local pos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                                if onScreen then
+                                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                                    if dist < AimbotConfig.FOVSize then
+                                        table.insert(targets, {
+                                            part = targetPart,
+                                            position = targetPart.Position,
+                                            dist = dist,
+                                            screenPos = Vector2.new(pos.X, pos.Y)
+                                        })
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            table.sort(targets, function(a, b) return a.dist < b.dist end)
+            
+            if #targets > 0 then
+                local target = targets[1]
+                if AimbotConfig.WallCheck then
+                    local origin = camera.CFrame.Position
+                    local direction = (target.position - origin).Unit * (target.position - origin).Magnitude
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                    raycastParams.FilterDescendantsInstances = {player.Character}
+                    local result = workspace:Raycast(origin, direction, raycastParams)
+                    if result then
+                        local hitPart = result.Instance
+                        if hitPart and hitPart:IsDescendantOf(target.part.Parent) then
+                            silentAimTarget = target
+                            camera.CFrame = CFrame.new(camera.CFrame.Position, target.position)
+                            LastCameraRotation = camera.CFrame.Rotation
+                        end
+                    end
+                else
+                    silentAimTarget = target
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, target.position)
+                    LastCameraRotation = camera.CFrame.Rotation
+                end
+            else
+                silentAimTarget = nil
+            end
+        else
+            if not AimbotConfig.Enabled then silentAimTarget = nil end
+        end
+
+        -- AIMBOT NORMAL
+        if AimbotConfig.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            if not CurrentTarget or not CurrentTarget.Parent or not CurrentTarget.Parent:FindFirstChildOfClass("Humanoid") or CurrentTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
+                local targets = {}
+                local mousePos = UserInputService:GetMouseLocation()
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= player and p.Character and not Whitelist[p.Name] then
+                        local char = p.Character
+                        local humanoid = char:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            if not AimbotConfig.TeamCheck or p.Team ~= player.Team then
+                                local targetPart = nil
+                                if AimbotConfig.TargetPart == "Head" then
+                                    targetPart = char:FindFirstChild("Head")
+                                elseif AimbotConfig.TargetPart == "Torso" then
+                                    targetPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                                elseif AimbotConfig.TargetPart == "Pelvis" then
+                                    targetPart = char:FindFirstChild("LowerTorso") or char:FindFirstChild("HumanoidRootPart")
+                                end
+                                if not targetPart then targetPart = char:FindFirstChild("HumanoidRootPart") end
+                                if targetPart then
+                                    local pos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                                    if onScreen then
+                                        local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                                        if dist < AimbotConfig.FOVSize then
+                                            table.insert(targets, {part = targetPart, pos = targetPart.Position, dist = dist})
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                table.sort(targets, function(a, b) return a.dist < b.dist end)
+                if #targets > 0 then
+                    CurrentTarget = targets[1]
+                else
+                    CurrentTarget = nil
+                end
+            end
+            if CurrentTarget then
+                local smoothFactor = AimbotConfig.Smoothness / 30
+                if smoothFactor < 0.03 then smoothFactor = 0.03 end
+                local targetCFrame = CFrame.new(camera.CFrame.Position, CurrentTarget.pos)
+                camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothFactor)
+                LastCameraRotation = camera.CFrame.Rotation
+            end
+        else
+            CurrentTarget = nil
+        end
+
+        -- ESP DRAWING (COM SKELETON CORRIGIDO)
+        for _, p in pairs(Players:GetPlayers()) do
+            local vis = ESP[p]
+            if not vis then continue end
+
+            -- Reseta todas as visibilidades
+            for _, c in pairs(vis.Corners) do c.Visible = false end
+            for _, b in pairs(vis.Bones) do b.Visible = false end
+            vis.Box.Visible = false
+            vis.Tracer.Visible = false
+            vis.Name.Visible = false
+            vis.Distance.Visible = false
+
+            local char = p.Character
+            if char and p ~= player then
+                if AimbotConfig.TeamCheck and p.Team == player.Team then
+                    continue
+                end
+                if Whitelist[p.Name] then
+                    continue
+                end
+                
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local head = char:FindFirstChild("Head")
+                
+                if root and hum and hum.Health > 0 and head then
+                    local rPos, onScreen = camera:WorldToViewportPoint(root.Position)
+                    if onScreen then
+                        local isVisible = IsVisible(head, char)
+                        local corDinamica = isVisible and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+
+                        local topY = camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0)).Y
+                        local botY = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0)).Y
+                        local h = math.abs(topY - botY)
+                        local w = h * 0.6
+                        local x = rPos.X - (w/2)
+
+                        -- CORNER 2D
+                        if VisualConfig.Corner2D then
+                            local tl, tl2, tr, tr2, bl, bl2, br, br2 = vis.Corners[1], vis.Corners[2], vis.Corners[3], vis.Corners[4], vis.Corners[5], vis.Corners[6], vis.Corners[7], vis.Corners[8]
+                            local len = w / 4
+                            if tl and tl2 and tr and tr2 and bl and bl2 and br and br2 then
+                                tl.From = Vector2.new(x, topY); tl.To = Vector2.new(x + len, topY); tl.Color = corDinamica; tl.Visible = true
+                                tl2.From = Vector2.new(x, topY); tl2.To = Vector2.new(x, topY + len); tl2.Color = corDinamica; tl2.Visible = true
+                                tr.From = Vector2.new(x + w, topY); tr.To = Vector2.new(x + w - len, topY); tr.Color = corDinamica; tr.Visible = true
+                                tr2.From = Vector2.new(x + w, topY); tr2.To = Vector2.new(x + w, topY + len); tr2.Color = corDinamica; tr2.Visible = true
+                                bl.From = Vector2.new(x, topY + h); bl.To = Vector2.new(x + len, topY + h); bl.Color = corDinamica; bl.Visible = true
+                                bl2.From = Vector2.new(x, topY + h); bl2.To = Vector2.new(x, topY + h - len); bl2.Color = corDinamica; bl2.Visible = true
+                                br.From = Vector2.new(x + w, topY + h); br.To = Vector2.new(x + w - len, topY + h); br.Color = corDinamica; br.Visible = true
+                                br2.From = Vector2.new(x + w, topY + h); br2.To = Vector2.new(x + w, topY + h - len); br2.Color = corDinamica; br2.Visible = true
+                            end
+                        end
+
+                        -- BOX ESP
+                        if VisualConfig.BoxESP then
+                            vis.Box.Size = Vector2.new(w, h)
+                            vis.Box.Position = Vector2.new(x, topY)
+                            vis.Box.Color = corDinamica
+                            vis.Box.Visible = true
+                        end
+
+                        -- TRACERS
+                        if VisualConfig.ShowTracers then
+                            local tracerYPos = camera.ViewportSize.Y
+                            if VisualConfig.TracersPosition == "Em cima" then
+                                tracerYPos = 0
+                            end
+                            vis.Tracer.From = Vector2.new(camera.ViewportSize.X/2, tracerYPos)
+                            vis.Tracer.To = Vector2.new(rPos.X, rPos.Y)
+                            vis.Tracer.Color = VisualConfig.LinesColor
+                            vis.Tracer.Visible = true
+                        end
+
+                        -- NOME
+                        if VisualConfig.ShowName then
+                            vis.Name.Text = p.Name
+                            local yOff = VisualConfig.NamePosition == "Head" and -20 or h + 15
+                            vis.Name.Position = Vector2.new(rPos.X, topY + yOff)
+                            vis.Name.Color = VisualConfig.NameColor
+                            vis.Name.Visible = true
+                        end
+
+                        -- DISTÂNCIA
+                        if VisualConfig.ShowDistance then
+                            local dist = math.floor((root.Position - camera.CFrame.Position).Magnitude)
+                            vis.Distance.Text = dist .. "m"
+                            local yOff = VisualConfig.DistancePosition == "Head" and -35 or h + 30
+                            vis.Distance.Position = Vector2.new(rPos.X, topY + yOff)
+                            vis.Distance.Color = VisualConfig.DistanceColor
+                            vis.Distance.Visible = true
+                        end
+
+                        -- ============================================================
+                        -- SKELETON ESP CORRIGIDO
+                        -- ============================================================
+                        if VisualConfig.SkeletonESP then
+                            local bIdx = 1
+                            local skeletonColor = VisualConfig.SkeletonColor
+                            
+                            -- Coleta todas as partes disponíveis do personagem
+                            local parts = {}
+                            for _, child in pairs(char:GetChildren()) do
+                                if child:IsA("BasePart") then
+                                    parts[child.Name] = child
+                                end
+                            end
+                            parts["HumanoidRootPart"] = root
+                            
+                            -- Desenha cada par de ossos
+                            for _, pair in pairs(bonePairs) do
+                                local partA = parts[pair[1]]
+                                local partB = parts[pair[2]]
+                                
+                                if partA and partB and vis.Bones[bIdx] then
+                                    local posA, onScreenA = camera:WorldToViewportPoint(partA.Position)
+                                    local posB, onScreenB = camera:WorldToViewportPoint(partB.Position)
+                                    
+                                    if onScreenA and onScreenB then
+                                        vis.Bones[bIdx].From = Vector2.new(posA.X, posA.Y)
+                                        vis.Bones[bIdx].To = Vector2.new(posB.X, posB.Y)
+                                        vis.Bones[bIdx].Color = skeletonColor
+                                        vis.Bones[bIdx].Thickness = 2
+                                        vis.Bones[bIdx].Visible = true
+                                        bIdx = bIdx + 1
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+-- ============================================================
+-- HITBOX LOOP
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.05) do
+        if AimbotConfig.SilentAim then
+            HitboxConfig.headEnabled = true
+            HitboxConfig.headSize = 10
+            HitboxConfig.transparency = 0.99
+            HitboxConfig.torsoEnabled = false
+        end
+        aplicarHitbox()
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if AimbotConfig.SilentAim then
+        HitboxConfig.headEnabled = true
+        HitboxConfig.headSize = 10
+        HitboxConfig.transparency = 0.99
+        HitboxConfig.torsoEnabled = false
+    end
+    aplicarHitbox()
+end)
+
+-- ============================================================
+-- DRAG DA UI
+-- ============================================================
+local dragStart, startPos, dragging
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mouse = player:GetMouse()
+        if mouse then
+            local guiObject = mouse.Target
+            if guiObject and guiObject:IsA("TextButton") and guiObject.Parent and guiObject.Parent:FindFirstChild("FRH_SliderBar") then
+                return
+            end
+        end
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- ============================================================
+-- NOTIFICAÇÃO
+-- ============================================================
+StarterGui:SetCore("SendNotification", {
+    Title = "FRH",
+    Text = "Pressione " .. getBindName(MicsConfig.MenuKey) .. " para abrir o menu",
+    Duration = 5
+})
+
+SalvarConfiguracoes()
+
+while wait(60) do end
